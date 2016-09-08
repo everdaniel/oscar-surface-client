@@ -9,4 +9,4 @@ Install with e.g
 
 ## params
 
-usage: python3 oscar-client.py -up:hv [--help --verbose --username=USER --password=PW]
+usage: python3 oscar-saml.py -up:hv [--help --verbose --username=USER --password=PW]
