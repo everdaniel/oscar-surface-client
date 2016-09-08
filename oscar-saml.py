@@ -70,15 +70,15 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 				print("login ok..")
 
 	
-	params = parseFormInputs(html_doc,url)	
+	[params,actionurl] = parseFormInputs(html_doc,url)	
 
-	return params
+	return [params,actionurl]
 	
 loginUrl="https://oscar.wmo.int/surface/save-state?programId="
 
 
 try:
-	opts, args = getopt.getopt(sys.argv[1:], "up:h", ["username=", "password=", "help"])
+	opts, args = getopt.getopt(sys.argv[1:], "up:hv", ["username=", "password=", "help", "verbose"])
 except getopt.GetoptError as err:
 	# print help information and exit:
 	print(err) # will print something like "option -a not recognized"
