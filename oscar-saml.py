@@ -6,7 +6,7 @@ import getopt
 			
 
 def usage():
-	print("usage: {} -up:h [--help --username=USER --password=PW]".format(__file__))
+	print("usage: {} -up:hv [--help --verbose --username=USER --password=PW]".format(__file__))
 			
 # extract from html the form keys and values as dicctionary
 def parseFormInputs(html,url):
@@ -36,7 +36,7 @@ def parseFormInputs(html,url):
 # we get a URL using a session and extract the form parameters, which are returned	
 def requestUrlandGetForm(url,session,params,text,mode="POST"):
 	
-	headers = {"Accept-Language": "en-US,en;q=0.5"}
+	headers = {"Accept-Language": "en-US,en;"}
 
 	
 	if mode=="POST":
@@ -47,7 +47,9 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 		print("{} not supported".format(mode))
 		sys.exit(1)
 		
-	print("{} .. {} status:{}".format(text,url,r.status_code))
+	if verbose:	
+		print("{} .. {} status:{}".format(text,url,r.status_code))
+	
 	if not r.status_code == 200:
 		print("problem with request code: {}".format(r.status_code))
 		sys.exit(1)
@@ -64,7 +66,8 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 			print("Login failed: {}".format(element.string))
 			sys.exit(1)
 		else:
-			print("login ok..")
+			if verbose:
+				print("login ok..")
 
 	
 	params = parseFormInputs(html_doc,url)	
@@ -84,9 +87,12 @@ except getopt.GetoptError as err:
 	
 username = None
 password = None
+verbose = False
 for o, a in opts:
 	if o in ("-u", "--username"):
 		username=a
+	elif o in ("-v", "--verbose"):
+		verbose=True
 	elif o in ("-p", "--password"):
 		password = a
 	elif o in ("-h", "--help"):
