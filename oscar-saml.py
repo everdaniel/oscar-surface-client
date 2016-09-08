@@ -9,7 +9,7 @@ def usage():
 	print("usage: {} -up:h [--help --username=USER --password=PW]".format(__file__))
 			
 # extract from html the form keys and values as dicctionary
-def parseFormInputs(html):
+def parseFormInputs(html,url):
 
 	soup = BeautifulSoup(html, 'html.parser')
 
@@ -20,16 +20,29 @@ def parseFormInputs(html):
 	for element in soup.find_all('input'):
 		if 'name' in element.attrs.keys():
 			params[element["name"]]=element["value"]
-			
-	return params
+	
+	element = soup.find("form")
+	actionurl = None
+	if element and element.get("action"):
+		actionurl = element.get("action")
+		if "http" not in actionurl: #not FQDN
+			actionurl = "{}{}".format(url,actionurl)
+		
+	#action = element.attr["action"]
+	#print("action:{}".format(action))
+	
+	return [params,actionurl]
 
 # we get a URL using a session and extract the form parameters, which are returned	
 def requestUrlandGetForm(url,session,params,text,mode="POST"):
 	
+	headers = {"Accept-Language": "en-US,en;q=0.5"}
+
+	
 	if mode=="POST":
-		r = session.post(url,data=params)
+		r = session.post(url,data=params,headers=headers)
 	elif mode=="GET":
-		r = session.get(url)
+		r = session.get(url,headers=headers)
 	else:
 		print("{} not supported".format(mode))
 		sys.exit(1)
@@ -41,7 +54,7 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 
 	html_doc = r.text
 	
-	if url is bitSubmitUrl3: #if it is the BIT login we check for error texts
+	if "CH-LOGIN?login" in url: #if it is the BIT login we check for error texts
 		#print(html_doc)
 		#if any(x in html_doc for x in  ['credential is permanently locked','The login attempt has failed','Die Anmeldung ist fehlgeschlagen'] ):
 			
@@ -54,17 +67,11 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 			print("login ok..")
 
 	
-	params = parseFormInputs(html_doc)	
+	params = parseFormInputs(html_doc,url)	
 
 	return params
 	
 loginUrl="https://oscar.wmo.int/surface/save-state?programId="
-bitSubmitUrl="https://feds.eiam.admin.ch/adfs/ls/"
-bitSubmitUrl2="https://idp-base.gate.eiam.admin.ch/auth/saml2/sso/CH-LOGIN"
-bitSubmitUrl3="https://idp-base.gate.eiam.admin.ch/auth/saml2/sso/CH-LOGIN?login&language=en"
-loginUrl2="https://oscar.wmo.int/auth/saml2/acs"
-loginUrl3="https://oscar.wmo.int/auth/saml2/sso"
-loginUrl4="https://oscar.wmo.int/surface/auth"
 
 
 try:
@@ -93,44 +100,50 @@ if (not username or not password):
 	sys.exit(2)
 
 
-oscarSession = requests.Session()
-params=requestUrlandGetForm(loginUrl,oscarSession,None,"initiating oscar session","GET")
+try:
 	
+	oscarSession = requests.Session()
+	[params,nexturl]=requestUrlandGetForm(loginUrl,oscarSession,None,"initiating oscar session","GET")
+		
 
-bitSession = requests.Session()
-params2=requestUrlandGetForm(bitSubmitUrl,bitSession,params,"sending SAML token to BIT")
-params3=requestUrlandGetForm(bitSubmitUrl2,bitSession,params2,"SSO at BIT")
+	bitSession = requests.Session()
+	[params2,nexturl]=requestUrlandGetForm(nexturl,bitSession,params,"sending SAML token to BIT")
+	[params3,nexturl]=requestUrlandGetForm(nexturl,bitSession,params2,"SSO at BIT")
 
-#prepare for login
-params3['isiwebuserid']=username
-params3['isiwebpasswd']=password
-#so that BIT knows that we do not want to register or abort
-params3.pop('registerUser')
-params3.pop('cancelPwdLogin')
+	#prepare for login
+	params3['isiwebuserid']=username
+	params3['isiwebpasswd']=password
+	#so that BIT knows that we do not want to register or abort
+	params3.pop('registerUser')
+	params3.pop('cancelPwdLogin')
 
-# login
-params4=requestUrlandGetForm(bitSubmitUrl3,bitSession,params3,"sending username and password to BIT")
+	# login
+	[params4,nexturl]=requestUrlandGetForm(nexturl,bitSession,params3,"sending username and password to BIT")
 
-# get final SAML token
-params5=requestUrlandGetForm(bitSubmitUrl,bitSession,params4,"SSO2 at BIT")
+	# get final SAML token
+	[params5,nexturl]=requestUrlandGetForm(nexturl,bitSession,params4,"SSO2 at BIT")
 
-# we're back to OSCAR
-params6=requestUrlandGetForm(loginUrl2,oscarSession,params5,"back to OSCAR")
+	# we're back to OSCAR
+	[params6,nexturl]=requestUrlandGetForm(nexturl,oscarSession,params5,"back to OSCAR")
 
-# OSCAR sso
-params7=requestUrlandGetForm(loginUrl3,oscarSession,params6,"SSO at OSCAR")
+	# OSCAR sso
+	[params7,nexturl]=requestUrlandGetForm(nexturl,oscarSession,params6,"SSO at OSCAR")
 
-# OSCAR auth
-params8=requestUrlandGetForm(loginUrl4,oscarSession,params7,"auth at OSCAR")
+	# OSCAR auth
+	[params8,nexturl]=requestUrlandGetForm(nexturl,oscarSession,params7,"auth at OSCAR")
 
 
 
-# test if we are logged in.
-# if we are logged in the url https://oscar.wmo.int/surface/save-state?programId= returns index.html.. otherwise it returns login something
+	# test if we are logged in.
+	# if we are logged in the url https://oscar.wmo.int/surface/save-state?programId= returns index.html.. otherwise it returns login something
 
-r8=oscarSession.get(loginUrl)
+	r8=oscarSession.get(loginUrl)
 
-if "index.html" in r8.url:
-	print("loggin ok")
-else:
-	print("not logged in")
+	if "index.html" in r8.url:
+		print("loggin ok")
+	else:
+		print("not logged in")
+
+except TimeoutError:
+	print("timeout..")
+	sys.exit(2)
