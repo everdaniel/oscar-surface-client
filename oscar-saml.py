@@ -1,7 +1,13 @@
 import requests
 from bs4 import BeautifulSoup
 import sys
+import getopt
 
+			
+
+def usage():
+	print("usage: {} -up:h [--help --username=USER --password=PW]".format(__file__))
+			
 # extract from html the form keys and values as dicctionary
 def parseFormInputs(html):
 
@@ -36,8 +42,13 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 	html_doc = r.text
 	
 	if url is bitSubmitUrl3: #if it is the BIT login we check for error texts
-		if any(x in html_doc for x in  ['credential is permanently locked','The login attempt has failed'] ):
-			print("Login failed..")
+		#print(html_doc)
+		#if any(x in html_doc for x in  ['credential is permanently locked','The login attempt has failed','Die Anmeldung ist fehlgeschlagen'] ):
+			
+		soup = BeautifulSoup(html_doc, 'html.parser')
+		element = soup.find('span', {"class":"iconDialogError"})
+		if element:
+			print("Login failed: {}".format(element.string))
 			sys.exit(1)
 		else:
 			print("login ok..")
@@ -50,10 +61,36 @@ def requestUrlandGetForm(url,session,params,text,mode="POST"):
 loginUrl="https://oscar.wmo.int/surface/save-state?programId="
 bitSubmitUrl="https://feds.eiam.admin.ch/adfs/ls/"
 bitSubmitUrl2="https://idp-base.gate.eiam.admin.ch/auth/saml2/sso/CH-LOGIN"
-bitSubmitUrl3="https://idp-base.gate.eiam.admin.ch/auth/saml2/sso/CH-LOGIN?login&amp;language=en"
+bitSubmitUrl3="https://idp-base.gate.eiam.admin.ch/auth/saml2/sso/CH-LOGIN?login&language=en"
 loginUrl2="https://oscar.wmo.int/auth/saml2/acs"
 loginUrl3="https://oscar.wmo.int/auth/saml2/sso"
 loginUrl4="https://oscar.wmo.int/surface/auth"
+
+
+try:
+	opts, args = getopt.getopt(sys.argv[1:], "up:h", ["username=", "password=", "help"])
+except getopt.GetoptError as err:
+	# print help information and exit:
+	print(err) # will print something like "option -a not recognized"
+	usage()
+	sys.exit(2)
+	
+username = None
+password = None
+for o, a in opts:
+	if o in ("-u", "--username"):
+		username=a
+	elif o in ("-p", "--password"):
+		password = a
+	elif o in ("-h", "--help"):
+		usage()
+		sys.exit(1)
+	else:
+		assert False, "unhandled option"
+
+if (not username or not password):
+	usage()
+	sys.exit(2)
 
 
 oscarSession = requests.Session()
@@ -65,8 +102,8 @@ params2=requestUrlandGetForm(bitSubmitUrl,bitSession,params,"sending SAML token 
 params3=requestUrlandGetForm(bitSubmitUrl2,bitSession,params2,"SSO at BIT")
 
 #prepare for login
-params3['isiwebuserid']='CH1000253'
-params3['isiwebpasswd']='YOURPW'
+params3['isiwebuserid']=username
+params3['isiwebpasswd']=password
 #so that BIT knows that we do not want to register or abort
 params3.pop('registerUser')
 params3.pop('cancelPwdLogin')
